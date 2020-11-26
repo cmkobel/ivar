@@ -16,32 +16,39 @@ import re
 
 configfile: "config.json"
 
+title = config["title"]
+
+out_base = config["out_base"]
+out_dir = out_base + title
+
+samples_path = config["input_base"] + title + ".tab"
+batch_path = config["batch_paths"][title]
+
 reference = config["reference"]
 bed_file = config["bed_file"]
-out_dir = config["out_dir"]
-samples_path = config["samples_path"]
-batch_path = config["batch_paths"]["201123"]
 
-#print(batch_path)
 
 df = pd.read_table(samples_path, sep="\t")
 
 
-
+# append the paths to the sample names
 df["forward"] = batch_path + df["forward"]
 df["reverse"] = batch_path + df["reverse"]
+# TODO: Consider making an automatical sample-parsing function with regex
 
 
-print(df)
+#print("title:", title)
+#print("data frame:")
+#print(df)
 
-print("---")
+#print("//")
 
 # _ is a dataframe with one line per sample, so that many sample_libraries can be merged together.
 # I think it is only used in rule merge_multiple_libraries
 _ = df.groupby("sample").sum() # So you can merge more runs from the same isolate?
-lib_delim = config["library_delimiter"]
+#lib_delim = config["library_delimiter"]
 
-print(_)
+#print(_)
 
 
 # Somehow format the sample_library column by some delimiter and join it with underscores.
@@ -83,6 +90,7 @@ rule trim_reads:
         rm {params.tmp}
         """
 
+# This target should be removed
 rule merge_multiple_libraries:
     input:
         bams=lambda wildcards: df[df["sample"] == _[_["sample_library"] == wildcards.sample].index.values[0]]["sample_library"].apply(lambda x: os.path.join(out_dir, "aligned_bams", x +".sorted.bam")).tolist(),

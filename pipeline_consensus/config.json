@@ -1,10 +1,14 @@
 {
-  "reference": "../../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.reference.fasta",
-  "bed_file": "../../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed",
-  "out_dir": "../../output/test_all_order",
-  "samples_path": "samples.tsv",
-  "library_delimiter": "_",
-  "batch_paths": {
-    "201123" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/"
-  }
+    "title": "samples_testing",
+    
+    "batch_paths": {
+        //"201123" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/",
+        "samples_testing" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/"
+    },
+
+    "reference": "../../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.reference.fasta",
+    "bed_file": "../../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed",
+    "out_base": "../../output/", 
+    "input_base": "../../input/",
+
 }
