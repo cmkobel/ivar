@@ -62,7 +62,10 @@ print(_)
 rule all:
     input:
         #expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = _["sample_library"])
-        expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = df["sample"])
+        expand(["{out_dir}/consensus_sequences/{sample}.fa",
+                "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+                "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"],
+               out_dir = out_dir, sample = df["sample"])
 
 
 rule call_consensus:
@@ -76,6 +79,28 @@ rule call_consensus:
         """
         samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -p {output} -m 10 -n N
         """
+
+#rule variants: # Calls variants from the alignment (TODO)
+
+rule depth:
+    input:
+        "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
+    output:
+        ["{out_dir}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+         "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
+    params:
+        bed="{bed}".format(bed = bed_file)
+    conda:
+        "envs/ivar-inpipe.yml"
+    shell:
+        """
+
+        
+        samtools depth -a {input} -o {output[0]}
+        samtools depth -b {params.bed} {input} -o {output[1]}
+
+        """
+
 
 rule trim_reads:
     input:
@@ -95,31 +120,6 @@ rule trim_reads:
         rm {params.tmp}
         """
 
-## This target should be removed
-#rule merge_multiple_libraries:
-#    input:
-#        bams=lambda wildcards: df[df["sample"] == _[_["sample_library"] == wildcards.sample].index.values[0]]["sample_library"].apply(lambda x: os.path.join(out_dir, "aligned_bams", x +".sorted.bam")).tolist(),
-#        forward_=lambda wildcards: df[df["sample"] == _[_["sample_library"] == wildcards.sample].index.values[0]]["forward"].sort_values().tolist(),
-#        reverse_=lambda wildcards: df[df["sample"] == _[_["sample_library"] == wildcards.sample].index.values[0]]["reverse"].sort_values().tolist()
-#    output:
-#        bam="{out_dir}/merged_aligned_bams/{sample}.sorted.bam",
-#        fastq=expand("{{out_dir}}/merged_fastq/{{sample}}_R{readno}.fastq.gz", readno=[1,2])
-#    params:
-#        tmp="{out_dir}/merged_aligned_bams/{sample}.bam"
-#    conda:
-#        "envs/ivar-inpipe.yml"
-#    shell:
-#        """
-#        samtools merge {params.tmp} {input.bams}
-#
-#
-#
-#        
-#        samtools sort -T {wildcards.sample}.merge -o {output.bam} {params.tmp}
-#        rm {params.tmp}
-#        cat {input.forward_} > {output.fastq[0]}
-#        cat {input.reverse_} > {output.fastq[1]}
-#        """
 
 rule align_reads:
     input:
@@ -137,7 +137,7 @@ rule align_reads:
         """
     
 
-        mkdir -p {out_dir}
+        mkdir -p {out_dir} # Does it automatically create this dir?
 
         bwa mem {params.ref} {input[0]} {input[1]} | samtools view -F 4 -Sb | samtools sort -T {wildcards.sample}.align -o {params.tmp}
 
