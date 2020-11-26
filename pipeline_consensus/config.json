@@ -2,7 +2,7 @@
     "title": "samples_testing",
     
     "batch_paths": {
-        //"201123" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/",
+        "201123" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/",
         "samples_testing" : "../../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq/"
     },
 
