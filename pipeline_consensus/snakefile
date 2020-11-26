@@ -1,6 +1,8 @@
 
 # snakemake --profile configs/slurm2 --batch run_main=1/1 
 # snakemake --profile configs/slurm2 all
+# snakemake --profile configs/slurm all
+
 
 
 import os
@@ -120,10 +122,11 @@ rule align_reads:
     shell:
         """
     
-        >&2 echo "abemad1"
-        >&2 echo "{wildcards.sample}"
+
+        mkdir -p {out_dir}
+
         bwa mem {params.ref} {input[0]} {input[1]} | samtools view -F 4 -Sb | samtools sort -T {wildcards.sample}.align -o {params.tmp}
-        >&2 echo "abemad2"
+
 
         samtools addreplacerg -r "ID:{wildcards.sample}" -o {output} {params.tmp}
         rm {params.tmp}
