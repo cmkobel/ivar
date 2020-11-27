@@ -8,3 +8,4 @@ dependencies:
   - bwa
   - python=3.7
   - biopython=1.74
+  - trim-galore

@@ -31,6 +31,9 @@ bed_file = config["bed_file"]
 df = pd.read_table(samples_path, sep="\t")
 
 
+df["basename_forward"] = df["forward"]
+df["basename_reverse"] = df["reverse"]
+
 # append the paths to the sample names
 df["forward"] = batch_path + df["forward"]
 df["reverse"] = batch_path + df["reverse"]
@@ -95,7 +98,6 @@ rule depth:
     shell:
         """
 
-        
         samtools depth -a {input} -o {output[0]}
         samtools depth -b {params.bed} {input} -o {output[1]}
 
@@ -109,8 +111,8 @@ rule trim_reads:
     output:
         "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
     params:
-        bed="{bed}".format(bed = bed_file),
-        tmp="{out_dir}/trimmed_bams/{sample}.trimmed.bam"
+        bed ="{bed}".format(bed = bed_file),
+        tmp ="{out_dir}/trimmed_bams/{sample}.trimmed.bam"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -120,7 +122,7 @@ rule trim_reads:
         rm {params.tmp}
         """
 
-
+# TODO: Consider spliting adapter-trimming and alignment up into two rules
 rule align_reads:
     input:
         #lambda wildcards: df[df["sample_library"]==wildcards.sample][["forward", "reverse"]].values[0].tolist()
@@ -129,19 +131,27 @@ rule align_reads:
     output:
         "{out_dir}/aligned_bams/{sample}.sorted.bam"
     params:
-        ref= "{ref}".format(ref = reference),
-        tmp="{out_dir}/aligned_bams/{sample}.sorted.tmp.bam"
+        ref = "{ref}".format(ref = reference),
+        trim_path = "{out_dir}/adapters_trimmed/",
+        tmp ="{out_dir}/aligned_bams/{sample}.sorted.tmp.bam"
     conda:
         "envs/ivar-inpipe.yml"
+    threads:
+        4
     shell:
         """
-    
+        
+        trim_galore --paired --fastqc --cores 4 --gzip -o {params.trim_path} --basename {wildcards.sample} {input[0]} {input[1]}  
 
-        mkdir -p {out_dir} # Does it automatically create this dir?
+        
+        bwa mem {params.ref} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
+        | samtools view -F 4 -Sb -@ 4 \
+        | samtools sort -@ 4 -T {wildcards.sample}.align -o {params.tmp}
 
-        bwa mem {params.ref} {input[0]} {input[1]} | samtools view -F 4 -Sb | samtools sort -T {wildcards.sample}.align -o {params.tmp}
 
 
-        samtools addreplacerg -r "ID:{wildcards.sample}" -o {output} {params.tmp}
+
+        samtools addreplacerg -@ 4 -r "ID:{wildcards.sample}" -o {output} {params.tmp}
         rm {params.tmp}
+
         """
