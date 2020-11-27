@@ -31,12 +31,12 @@ bed_file = config["bed_file"]
 df = pd.read_table(samples_path, sep="\t")
 
 
-df["basename_forward"] = df["forward"]
-df["basename_reverse"] = df["reverse"]
+#df["basename_forward"] = df["forward"]
+#df["basename_reverse"] = df["reverse"]
 
 # append the paths to the sample names
-df["forward"] = batch_path + df["forward"]
-df["reverse"] = batch_path + df["reverse"]
+df["forward_path"] = batch_path + df["forward"]
+df["reverse_path"] = batch_path + df["reverse"]
 # TODO: Consider making an automatical sample-parsing function with regex
 
 
@@ -125,8 +125,8 @@ rule trim_reads:
 # TODO: Consider spliting adapter-trimming and alignment up into two rules
 rule align_reads:
     input:
-        #lambda wildcards: df[df["sample_library"]==wildcards.sample][["forward", "reverse"]].values[0].tolist()
-        lambda wildcards: df[df["sample"]==wildcards.sample][["forward", "reverse"]].values[0].tolist()
+        #lambda wildcards: df[df["sample_library"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
+        lambda wildcards: df[df["sample"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
 
     output:
         "{out_dir}/aligned_bams/{sample}.sorted.bam"
@@ -144,7 +144,7 @@ rule align_reads:
         trim_galore --paired --fastqc --cores 4 --gzip -o {params.trim_path} --basename {wildcards.sample} {input[0]} {input[1]}  
 
         
-        bwa mem {params.ref} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
+        bwa mem -t 4 {params.ref} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
         | samtools view -F 4 -Sb -@ 4 \
         | samtools sort -@ 4 -T {wildcards.sample}.align -o {params.tmp}
 
