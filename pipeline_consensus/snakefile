@@ -21,10 +21,13 @@ title = config["title"]
 out_base = config["out_base"]
 out_dir = out_base + title
 
-samples_path = config["input_base"] + title + ".tab"
+
+
+samples_path = config["input_base"] + "/" + title + ".tab"
 batch_path = config["batch_paths"][title]
 
 reference = config["reference"]
+annotation = config["annotation"]
 bed_file = config["bed_file"]
 
 
@@ -35,8 +38,8 @@ df = pd.read_table(samples_path, sep="\t")
 #df["basename_reverse"] = df["reverse"]
 
 # append the paths to the sample names
-df["forward_path"] = batch_path + df["forward"]
-df["reverse_path"] = batch_path + df["reverse"]
+df["forward_path"] = batch_path + "/" + df["forward"]
+df["reverse_path"] = batch_path + "/" +df["reverse"]
 # TODO: Consider making an automatical sample-parsing function with regex
 
 
@@ -65,17 +68,21 @@ print(_)
 rule all:
     input:
         #expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = _["sample_library"])
-        expand(["{out_dir}/consensus_sequences/{sample}.fa",
-                "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
-                "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"],
-               out_dir = out_dir, sample = df["sample"])
+        expand(["{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa",
+                "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+                #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv",
+                "{out_base}/{title}_{sample}/trimmed_bams/{sample}.tsv"],
+               out_dir = out_dir,
+               sample = df["sample"],
+               out_base = out_base,
+               title = title)
 
 
 rule call_consensus:
     input:
-        "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        "{out_dir}/consensus_sequences/{sample}.fa"
+        "{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -83,14 +90,28 @@ rule call_consensus:
         samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -p {output} -m 10 -n N
         """
 
-#rule variants: # Calls variants from the alignment (TODO)
+rule variants: # Calls variants from the alignment (TODO)
+    input:
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+    output:
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.tsv"
+    conda:
+        "envs/ivar-inpipe.yml"
+    shell:
+        """
+
+        samtools mpileup -aa -A -d 600000 -B -Q 0 {input} \
+        | ivar variants -p {output} -q 20 -t 0.03 -r {reference} -g {annotation}
+        
+        """
+
 
 rule depth:
     input:
-        "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        ["{out_dir}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
-         "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
+        ["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv"]#,
+         #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
     params:
         bed="{bed}".format(bed = bed_file)
     conda:
@@ -99,7 +120,7 @@ rule depth:
         """
 
         samtools depth -a {input} -o {output[0]}
-        samtools depth -b {params.bed} {input} -o {output[1]}
+        #samtools depth -b {params.bed} {input} -o {output[1]}
 
         """
 
@@ -107,12 +128,16 @@ rule depth:
 rule trim_reads:
     input:
         #"{out_dir}/merged_aligned_bams/{sample}.sorted.bam"
-        "{out_dir}/aligned_bams/{sample}.sorted.bam"
+        #"{out_dir}/aligned_bams/{sample}.sorted.bam"
+        "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.bam"
+
     output:
-        "{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        #"{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+
     params:
         bed ="{bed}".format(bed = bed_file),
-        tmp ="{out_dir}/trimmed_bams/{sample}.trimmed.bam"
+        tmp ="{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.bam"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -129,11 +154,12 @@ rule align_reads:
         lambda wildcards: df[df["sample"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
 
     output:
-        "{out_dir}/aligned_bams/{sample}.sorted.bam"
+        #"{out_dir}/aligned_bams/{sample}.sorted.bam"
+        "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.bam"
     params:
         ref = "{ref}".format(ref = reference),
-        trim_path = "{out_dir}/adapters_trimmed/",
-        tmp ="{out_dir}/aligned_bams/{sample}.sorted.tmp.bam"
+        trim_path = "{out_base}/{title}_{sample}/adapters_trimmed/",
+        tmp ="{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.tmp.bam"
     conda:
         "envs/ivar-inpipe.yml"
     threads:
@@ -144,7 +170,7 @@ rule align_reads:
         trim_galore --paired --fastqc --cores 4 --gzip -o {params.trim_path} --basename {wildcards.sample} {input[0]} {input[1]}  
 
         
-        bwa mem -t 4 {params.ref} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
+        bwa mem -t 4 {reference} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
         | samtools view -F 4 -Sb -@ 4 \
         | samtools sort -@ 4 -T {wildcards.sample}.align -o {params.tmp}
 
