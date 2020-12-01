@@ -71,11 +71,58 @@ rule all:
         expand(["{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa",
                 "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
                 #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv",
-                "{out_base}/{title}_{sample}/trimmed_bams/{sample}.tsv"],
+                "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps.tsv",
+                "{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv",
+                "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv"],
                out_dir = out_dir,
                sample = df["sample"],
                out_base = out_base,
                title = title)
+
+
+
+
+
+
+rule nextclade:
+    input:
+        "{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa"
+    output:
+        "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv"
+    params:
+        bind_base = "{out_base}/{title}_{sample}",
+        rel_in = "consensus_sequences/{sample}.fa",
+        rel_out = "nextclade/{sample}_nextclade.csv"
+    shell:
+        """
+        singularity run --bind {params.bind_base}:/sample_dir \
+            docker://neherlab/nextclade:0.7.5 \
+                nextclade.js \
+                    --input-fasta /sample_dir/{params.rel_in} \
+                    --output-csv /sample_dir/{params.rel_out}
+        """
+
+
+
+rule pangolin:
+    input:
+        "{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa"
+    output:
+        [directory("{out_base}/{title}_{sample}/pangolin/"),
+         "{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv"]
+    conda:
+        "envs/pangolin.yml" # This might be a bad idea (slow)
+    threads:
+        1
+    shell:
+        """
+
+        pangolin {input} \
+                --threads 1 \
+                --outdir {output[0]}
+        mv {output[0]}/lineage_report.csv {output[1]}
+
+        """
 
 
 rule call_consensus:
@@ -94,14 +141,19 @@ rule variants: # Calls variants from the alignment (TODO)
     input:
         "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.tsv"
+        "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps.tsv"
+    params:
+        tmp_noex = "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps_tmp"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
         """
 
         samtools mpileup -aa -A -d 600000 -B -Q 0 {input} \
-        | ivar variants -p {output} -q 20 -t 0.03 -r {reference} -g {annotation}
+        | ivar variants -p {params.tmp_noex} -q 20 -t 0.03 -r {reference} -g {annotation}
+
+        cat {params.tmp_noex}.tsv | awk -v sam={wildcards.sample} '{{ print sam "\\t" $0 }}' > {output}
+        rm {params.tmp_noex}.tsv
         
         """
 
@@ -173,8 +225,6 @@ rule align_reads:
         bwa mem -t 4 {reference} {params.trim_path}/{wildcards.sample}_val_1.fq.gz {params.trim_path}/{wildcards.sample}_val_2.fq.gz \
         | samtools view -F 4 -Sb -@ 4 \
         | samtools sort -@ 4 -T {wildcards.sample}.align -o {params.tmp}
-
-
 
 
         samtools addreplacerg -@ 4 -r "ID:{wildcards.sample}" -o {output} {params.tmp}
