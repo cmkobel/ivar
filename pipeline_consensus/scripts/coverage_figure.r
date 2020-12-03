@@ -65,7 +65,6 @@ bed_insert = read_tsv(path_insert_bed,
 str(bed_insert)
 
 
-#bed_list = bed %>% pivot_longer(c(chrom_start, chrom_end), names_repair = "unique")
 
 
 # plot coverage per sample
@@ -74,9 +73,7 @@ a = coverage %>%
     
     ggplot(aes(position, coverage)) + 
     
-   
-    #geom_line(data = coverage %>% filter(filter == "before trimming"), aes(position, coverage), linetype = "dashed") + 
-    #geom_line(data = coverage %>% filter(filter == "after trimming"), aes(position, coverage), linetype = "solid") + 
+
     
     # primer horizontal lines
     geom_segment(data = bed_primer, mapping = aes(x = chrom_start, xend = chrom_end, y = 0, yend = 0), color = "gray90", size = 8000, alpha = 0.5) +
@@ -87,9 +84,7 @@ a = coverage %>%
     
     
     
-    
-    #geom_area(alpha = 0.3) + # time intensive
-    #scale_color_manual(values = c("#00bfc4", "#f8766d")) + 
+
     
     #scale_y_log10() +
     
@@ -102,8 +97,6 @@ a = coverage %>%
     xlim(0, coverage$position %>% max) +
     labs(); #a
 
-
- #ggsave("plots/cov_a.png", height = 10, width = 30, plot = a)    
 
 
 
@@ -140,71 +133,5 @@ p = plot_grid(b, a, ncol = 1,
               align = "v", axis = "lr")
 # p
 
-
-#ggsave("plots/cov.png", height = 10, width = 30, plot = p)    
 ggsave(path_out, height = 10, width = 30, plot = p)    
 
-
-# deprecated stuff
-# b/a +
-#     plot_layout(heights = c(1, 20))
-
-#align_plots(b, a, align="h", axis="lr")
-
-#ggdraw(t[[1]]) + draw_plot(t[[2]])
-
-#library(patchwork)
-#t = align_patches(a, b)
-
-
-
-
-#
-#
-#
-#
-#lst = list()
-#for (group in group_split(coverage %>% group_by(sample))) {
-#    glimpse(group)
-#    
-#    sample_name = group$sample %>% unique
-#    plot_part = group %>% 
-#        #filter(sample == "auh-s67_V53490") %>% 
-#        
-#        ggplot(aes(position, coverage)) + 
-#        
-#        # primers
-#        geom_segment(data = bed_primer, mapping = aes(x = chrom_start, xend = chrom_end, y = 0, yend = 0, color = as.factor(strand)), size = 8000) +
-#        
-#        geom_line() + 
-#        #geom_area(alpha = 0.3) + # time intensive
-#        
-#        
-#        facet_grid(sample~.) + 
-#        theme_minimal() +
-#        theme(legend.position = "none") +
-#        xlim(0, coverage$position %>% max) + 
-#        labs(); #p
-#    
-#    lst[[sample_name]] = plot_part
-#    
-#}
-#
-#lst[["scale"]] = b
-#
-#
-#al = align_plots(
-#    plotlist = lst,
-#    align = "v",
-#    axis = "lr",
-#    greedy = TRUE
-#) 
-#
-#plot_grid(plotlist = al, ncol = 1)
-#
-#
-#
-#ggsave("plots/cov.png", height = 10, width = 30)    
-#
-#
-#
