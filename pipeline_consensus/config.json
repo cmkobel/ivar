@@ -1,8 +1,10 @@
 {
-    "title": "201123_short",
+    "title": "201123",
     
     "batch_paths": {
         "201123" : "../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq",
+        "201126" :  "../../../BACKUP/N331/201126_M07104_0024_000000000-JD3L9/fastq",
+
         "201123_short" : "../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq",        
         "samples_testing" : "../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq"
     },
@@ -10,6 +12,8 @@
     "reference": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.reference.fasta",
     "annotation": "../resources/sarscov2_GCF_009858895.2_ASM985889v3_genomic.gff",
     "bed_file": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed",
+    "bed_insert_file": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.insert.bed",
+    "cowplot_source": "../resources/cowplot_1.1.0.tar.gz",
     "out_base": "../output", 
     "input_base": "../input",
 

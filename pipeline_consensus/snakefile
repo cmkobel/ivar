@@ -29,6 +29,8 @@ batch_path = config["batch_paths"][title]
 reference = config["reference"]
 annotation = config["annotation"]
 bed_file = config["bed_file"]
+bed_insert_file = config["bed_insert_file"]
+cowplot_source = config["cowplot_source"]
 
 
 df = pd.read_table(samples_path, sep="\t")
@@ -50,17 +52,6 @@ print(df)
 
 print("//")
 
-# _ is a dataframe with one line per sample, so that many sample_libraries can be merged together.
-# I think it is only used in rule merge_multiple_libraries
-
-_ = df.groupby("sample").sum() # So you can merge more runs from the same isolate?
-#lib_delim = config["library_delimiter"]
-
-print(_)
-
-
-# Somehow format the sample_library column by some delimiter and join it with underscores.
-#_["sample_library"] = _["sample_library"].apply(lambda x: str(x).split(lib_delim)[0] +"_" + "_".join(re.findall("L[0-9]+", x)))
 
 
 
@@ -73,13 +64,29 @@ rule all:
                 #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv",
                 "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps.tsv",
                 "{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv",
-                "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv"],
+                "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv",
+                "{out_base}/{title}_coverage.png"],
                out_dir = out_dir,
                sample = df["sample"],
                out_base = out_base,
                title = title)
+    output:
+        ["{out_base}/{title}_nextclade.csv"]
+
+    shell:
+        """
+
+        cat {input[4]} > {output[0]}
+        
+
+        """
 
 
+
+onerror:
+    print("An error occurred")
+    print("{log}")
+    shell("mail -s 'ivar pipeline error' kobel@pm.me < {log}")
 
 
 
@@ -157,12 +164,44 @@ rule variants: # Calls variants from the alignment (TODO)
         
         """
 
+rule depth_fig:
+    input:
+        expand(["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv", 
+                "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.depth.tsv"],
+            out_base = out_base,
+            title = title,
+            sample = df["sample"])
+    output:
+        ["{out_base}/{title}_coverage.tab",
+         "{out_base}/{title}_coverage.png"]
+    shell:
+        """
+
+
+        
+        1>&2 echo "catting ..."
+        touch {output[0]}
+        cat {input} > {output[0]}
+        
+        1>&2 echo "singularitieing ..."
+        singularity run docker://rocker/tidyverse \
+            Rscript scripts/coverage_figure.r \
+                {output[0]} \
+                {bed_file} \
+                {bed_insert_file} \
+                {output[1]} #
+                #{cowplot_source}
+        
+        """
+
 
 rule depth:
     input:
-        "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        ["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam",
+         "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.bam"]
     output:
-        ["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv"]#,
+        ["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+         "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.depth.tsv"]#,
          #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
     params:
         bed="{bed}".format(bed = bed_file)
@@ -171,8 +210,9 @@ rule depth:
     shell:
         """
 
-        samtools depth -a {input} -o {output[0]}
-        #samtools depth -b {params.bed} {input} -o {output[1]}
+        samtools depth -a {input[0]} | awk -v sam={wildcards.sample} '{{ print sam "\\tafter trimming\\t" $0 }}' > {output[0]}
+        samtools depth -a {input[1]} | awk -v sam={wildcards.sample} '{{ print sam "\\tbefore trimming\\t" $0 }}' > {output[1]}
+
 
         """
 
