@@ -40,20 +40,31 @@ df = pd.read_table(samples_path, sep="\t")
 #df["basename_reverse"] = df["reverse"]
 
 # append the paths to the sample names
-df["forward_path"] = batch_path + "/" + df["forward"]
-df["reverse_path"] = batch_path + "/" +df["reverse"]
 # TODO: Consider making an automatical sample-parsing function with regex
 
 
 
 print("title:", title)
+print("path:", batch_path)
 print("data frame:")
 print(df)
 
 print("//")
 
+df["forward_path"] = batch_path + "/" + df["forward"]
+df["reverse_path"] = batch_path + "/" +df["reverse"]
+
+df["batch"] = title
 
 
+onerror:
+    print("An error occurred")
+    shell("mail -s 'ivar pipeline error' kobel@pm.me < {log}")
+
+
+
+# TODO: move all isolate data into isolates/
+# TODO: use double bracket encapsulation for the parameters out_base and title ({{}})
 
 
 rule all:
@@ -61,32 +72,80 @@ rule all:
         #expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = _["sample_library"])
         expand(["{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa",
                 "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
-                #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv",
                 "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps.tsv",
                 "{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv",
                 "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv",
-                "{out_base}/{title}_coverage.png"],
+                "{out_base}/{title}_coverage.png",
+                "{out_base}/all_nextclade.csv",
+                "{out_base}/all_pangolin.csv",
+                "{out_base}/{title}_input_list.tab",
+                "{out_base}/all_input_lists.tab"],
                out_dir = out_dir,
                sample = df["sample"],
                out_base = out_base,
                title = title)
+    
+
+
+rule collect:
+    input:
+        expand(["{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv",
+                "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv"],
+                sample = df["sample"], 
+                title = title,
+                out_base = out_base)
     output:
-        ["{out_base}/{title}_nextclade.csv"]
+        ["{out_base}/all_pangolin.csv",
+         "{out_base}/all_nextclade.csv",
+         "{out_base}/all_input_lists.tab"]
+    params: 
+        names = "\t".join(df.columns.tolist()) # assuming that all files have the same headers in the same order
 
     shell:
         """
 
-        cat {input[4]} > {output[0]}
+        # collect pangolin 
+        echo "sample,taxon,lineage,SH-alrt,UFbootstrap,lineages_version,status,note" \
+        > {output[0]}
+        cat {out_base}/*/pangolin/*pangolin.csv | grep -v "taxon,lineage," >> {output[0]}
         
+
+        # collect nextclade
+        echo "sample,seqName;substitutions;totalMutations;aminoacidChanges;totalAminoacidChanges;insertions;totalInsertions;deletions;totalGaps;missing;totalMissing;nonACGTNs;totalNonACGTNs;alignmentStart;alignmentEnd;alignmentScore;pcrPrimerChanges;totalPcrPrimerChanges;clade;qc.seqName;qc.privateMutations.score;qc.privateMutations.total;qc.privateMutations.excess;qc.privateMutations.cutoff;qc.privateMutations.status;qc.missingData.score;qc.missingData.totalMissing;qc.missingData.missingDataThreshold;qc.missingData.status;qc.snpClusters.score;qc.snpClusters.totalSNPs;qc.snpClusters.clusteredSNPs;qc.snpClusters.status;qc.mixedSites.score;qc.mixedSites.totalMixedSites;qc.mixedSites.mixedSitesThreshold;qc.mixedSites.status;qc.overallScore;qc.overallStatus" \
+        > {output[1]}
+        cat {out_base}/*/nextclade/*_nextclade.csv | grep -v "seqName;substitutions;" >> {output[1]}
+
+        
+        # collect input list files
+        echo -e "forward\\treverse\\tsample\\tcomment\\tforward_path\\treverse_path\\tbatch" 
+        echo -e "{params.names}" > {output[2]}
+        cat ../output/*input_list.tab | grep -vP "forward\\treverse" >> {output[2]}
+
+
 
         """
 
 
 
-onerror:
-    print("An error occurred")
-    print("{log}")
-    shell("mail -s 'ivar pipeline error' kobel@pm.me < {log}")
+rule batch: # Runs once per batch. Outputs the pandas dataframe that snakemake runs with. 
+    input:
+        expand("{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa",
+            out_dir = out_dir,
+               sample = df["sample"],
+               out_base = out_base,
+               title = title)
+    output:
+        "{out_base}/{title}_input_list.tab"
+    params:
+        csv_out = df.to_csv(sep='\t', encoding='utf-8', index = False)
+    shell:
+        """
+        # collect all input lists
+        echo '''{params.csv_out}''' > {output}
+
+        """
+
+
 
 
 
@@ -106,7 +165,14 @@ rule nextclade:
             docker://neherlab/nextclade:0.7.5 \
                 nextclade.js \
                     --input-fasta /sample_dir/{params.rel_in} \
-                    --output-csv /sample_dir/{params.rel_out}
+                    --output-csv /sample_dir/{params.rel_out}.tmp
+
+        cat {output}.tmp \
+        | awk -v sam={wildcards.sample} '{{ print sam ";" $0 }}' \
+        > {output}
+
+        rm {output}.tmp
+        
         """
 
 
@@ -123,11 +189,16 @@ rule pangolin:
         1
     shell:
         """
+        
+        touch {output[1]}
 
         pangolin {input} \
                 --threads 1 \
                 --outdir {output[0]}
-        mv {output[0]}/lineage_report.csv {output[1]}
+
+        cat {output[0]}/lineage_report.csv | awk -v sam={wildcards.sample} '{{ print sam "," $0 }}' > {output[1]}
+        rm {output[0]}/lineage_report.csv
+        #mv {output[0]}/lineage_report.csv {output[1]}
 
         """
 

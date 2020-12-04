@@ -86,7 +86,7 @@ a = coverage %>%
     
 
     
-    #scale_y_log10() +
+    scale_y_log10() +
     
     facet_grid(sample~.) + 
     theme_minimal() +
