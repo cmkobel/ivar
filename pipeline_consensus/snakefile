@@ -111,7 +111,7 @@ rule collect:
         
 
         # collect nextclade
-        echo "sample,seqName;substitutions;totalMutations;aminoacidChanges;totalAminoacidChanges;insertions;totalInsertions;deletions;totalGaps;missing;totalMissing;nonACGTNs;totalNonACGTNs;alignmentStart;alignmentEnd;alignmentScore;pcrPrimerChanges;totalPcrPrimerChanges;clade;qc.seqName;qc.privateMutations.score;qc.privateMutations.total;qc.privateMutations.excess;qc.privateMutations.cutoff;qc.privateMutations.status;qc.missingData.score;qc.missingData.totalMissing;qc.missingData.missingDataThreshold;qc.missingData.status;qc.snpClusters.score;qc.snpClusters.totalSNPs;qc.snpClusters.clusteredSNPs;qc.snpClusters.status;qc.mixedSites.score;qc.mixedSites.totalMixedSites;qc.mixedSites.mixedSitesThreshold;qc.mixedSites.status;qc.overallScore;qc.overallStatus" \
+        echo "sample;seqName;substitutions;totalMutations;aminoacidChanges;totalAminoacidChanges;insertions;totalInsertions;deletions;totalGaps;missing;totalMissing;nonACGTNs;totalNonACGTNs;alignmentStart;alignmentEnd;alignmentScore;pcrPrimerChanges;totalPcrPrimerChanges;clade;qc.seqName;qc.privateMutations.score;qc.privateMutations.total;qc.privateMutations.excess;qc.privateMutations.cutoff;qc.privateMutations.status;qc.missingData.score;qc.missingData.totalMissing;qc.missingData.missingDataThreshold;qc.missingData.status;qc.snpClusters.score;qc.snpClusters.totalSNPs;qc.snpClusters.clusteredSNPs;qc.snpClusters.status;qc.mixedSites.score;qc.mixedSites.totalMixedSites;qc.mixedSites.mixedSitesThreshold;qc.mixedSites.status;qc.overallScore;qc.overallStatus" \
         > {output[1]}
         cat {out_base}/*/nextclade/*_nextclade.csv | grep -v "seqName;substitutions;" >> {output[1]}
 
@@ -237,33 +237,48 @@ rule variants: # Calls variants from the alignment (TODO)
 
 rule depth_fig:
     input:
+        expand(["{out_base}/{title}_coverage.tab",
+                "{out_base}/all_nextclade.csv"],
+                out_base = out_base,
+                title = title)
+    output:
+         "{out_base}/{title}_coverage.png"
+    shell:
+        """
+
+        
+        1>&2 echo "singularitieing ..."
+        singularity run docker://rocker/tidyverse \
+            Rscript scripts/coverage_figure.r \
+                {input[0]} \
+                {input[1]} \
+                {bed_file} \
+                {bed_insert_file} \
+                {output} 
+                #{cowplot_source}
+        
+        """
+
+
+
+
+rule collect_depth:
+    input:
         expand(["{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv", 
                 "{out_base}/{title}_{sample}/aligned_bams/{sample}.sorted.depth.tsv"],
             out_base = out_base,
             title = title,
             sample = df["sample"])
     output:
-        ["{out_base}/{title}_coverage.tab",
-         "{out_base}/{title}_coverage.png"]
+        "{out_base}/{title}_coverage.tab"
     shell:
         """
-
-
         
         1>&2 echo "catting ..."
-        touch {output[0]}
-        cat {input} > {output[0]}
-        
-        1>&2 echo "singularitieing ..."
-        singularity run docker://rocker/tidyverse \
-            Rscript scripts/coverage_figure.r \
-                {output[0]} \
-                {bed_file} \
-                {bed_insert_file} \
-                {output[1]} #
-                #{cowplot_source}
+        cat {input} > {output}
         
         """
+
 
 
 rule depth:
