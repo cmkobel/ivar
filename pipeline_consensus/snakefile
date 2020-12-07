@@ -51,10 +51,23 @@ print(df)
 
 print("//")
 
+
+# a little bit of input validation:
+sample_name_lengths = set(df["sample"].str.len().values.tolist())
+if sample_name_lengths != {9}:
+    print("Error: Please make sure that the length of the sample name is eggzactly 9 letters long.\nThe given sample names have the lengths", sample_name_lengths,
+          "\nThe MADS-format specifies LYYNNNNNN, where L is the sample type letter, YY is the year and NNNNNN is the sample no.",
+          "\nExample: I20274139",
+          file = sys.stderr)
+    raise Exception()
+
+
 df["forward_path"] = batch_path + "/" + df["forward"]
 df["reverse_path"] = batch_path + "/" +df["reverse"]
 
 df["batch"] = title
+
+df["full_name"] = title + "_" + df["sample"]
 
 
 onerror:
@@ -70,32 +83,34 @@ onerror:
 rule all:
     input:
         #expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = _["sample_library"])
-        expand(["{out_base}/{title}_{sample}/consensus_sequences/{sample}.fa",
-                "{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
-                "{out_base}/{title}_{sample}/trimmed_bams/{sample}_snps.tsv",
-                "{out_base}/{title}_{sample}/pangolin/{sample}_pangolin.csv",
-                "{out_base}/{title}_{sample}/nextclade/{sample}_nextclade.csv",
+        expand(["{out_base}/{sample}/consensus_sequences/{sample}.fa",
+                "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+                "{out_base}/{sample}/aligned_bams/{sample}.sorted.bam",
+                "{out_base}/{sample}/trimmed_bams/{sample}_snps.tsv",
+                "{out_base}/{sample}/pangolin/{sample}_pangolin.csv",
+                "{out_base}/{sample}/nextclade/{sample}_nextclade.csv",
                 "{out_base}/{title}_coverage.png",
                 "{out_base}/all_nextclade.csv",
                 "{out_base}/all_pangolin.csv",
                 "{out_base}/{title}_input_list.tab",
                 "{out_base}/all_input_lists.tab"],
-               out_dir = out_dir,
-               sample = df["sample"],
+               sample = df["full_name"],
                out_base = out_base,
                title = title)
     
 
 
+# TODO: this rule might become deprecated as scripts/collect.sh matures
 rule collect:
     input:
-        expand(["{{out_base}}/{{title}}_{sample}/pangolin/{sample}_pangolin.csv",
-                "{{out_base}}/{{title}}_{sample}/nextclade/{sample}_nextclade.csv"],
-                sample = df["sample"])
+        expand(["{out_base}/{sample}/pangolin/{sample}_pangolin.csv",
+                "{out_base}/{sample}/nextclade/{sample}_nextclade.csv"],
+                sample = df["full_name"], 
+                out_base = out_base)
     output:
-        ["{{out_base}}/all_pangolin.csv",
-         "{{out_base}}/all_nextclade.csv",
-         "{{out_base}}/all_input_lists.tab"]
+        ["{out_base}/all_pangolin.csv",
+         "{out_base}/all_nextclade.csv",
+         "{out_base}/all_input_lists.tab"]
     params: 
         names = "\t".join(df.columns.tolist()) # assuming that all files have the same headers in the same order
 
@@ -127,11 +142,12 @@ rule collect:
 
 rule batch: # Runs once per batch. Outputs the pandas dataframe that snakemake runs with. 
     input:
-        expand("{{out_base}}/{{title}}_{sample}/consensus_sequences/{sample}.fa",
+        expand("{out_base}/{sample}/consensus_sequences/{sample}.fa",
             out_dir = out_dir,
-               sample = df["sample"])
+               sample = df["full_name"], 
+               out_base = out_base)
     output:
-        "{{out_base}}/{{title}}_input_list.tab"
+        "{out_base}/{title}_input_list.tab"
     params:
         csv_out = df.to_csv(sep='\t', encoding='utf-8', index = False)
     shell:
@@ -148,11 +164,11 @@ rule batch: # Runs once per batch. Outputs the pandas dataframe that snakemake r
 
 rule nextclade:
     input:
-        "{{out_base}}/{{title}}_{sample}/consensus_sequences/{sample}.fa"
+        "{out_base}/{sample}/consensus_sequences/{sample}.fa"
     output:
-        "{{out_base}}/{{title}}_{sample}/nextclade/{sample}_nextclade.csv"
+        "{out_base}/{sample}/nextclade/{sample}_nextclade.csv"
     params:
-        bind_base = "{{out_base}}/{{title}}_{sample}",
+        bind_base = "{out_base}/{sample}",
         rel_in = "consensus_sequences/{sample}.fa",
         rel_out = "nextclade/{sample}_nextclade.csv"
     shell:
@@ -175,10 +191,10 @@ rule nextclade:
 
 rule pangolin:
     input:
-        "{{out_base}}/{{title}}_{sample}/consensus_sequences/{sample}.fa"
+        "{out_base}/{sample}/consensus_sequences/{sample}.fa"
     output:
-        [directory("{{out_base}}/{{title}}_{sample}/pangolin/"),
-         "{{out_base}}/{{title}}_{sample}/pangolin/{sample}_pangolin.csv"]
+        [directory("{out_base}/{sample}/pangolin/"),
+         "{out_base}/{sample}/pangolin/{sample}_pangolin.csv"]
     conda:
         "envs/pangolin.yml" # This might be a bad idea (slow)
     threads:
@@ -201,9 +217,9 @@ rule pangolin:
 
 rule call_consensus:
     input:
-        "{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        "{{out_base}}/{{title}}_{sample}/consensus_sequences/{sample}.fa"
+        "{out_base}/{sample}/consensus_sequences/{sample}.fa"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -213,11 +229,11 @@ rule call_consensus:
 
 rule variants: # Calls variants from the alignment (TODO)
     input:
-        "{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        "{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}_snps.tsv"
+        "{out_base}/{sample}/trimmed_bams/{sample}_snps.tsv"
     params:
-        tmp_noex = "{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}_snps_tmp"
+        tmp_noex = "{out_base}/{sample}/trimmed_bams/{sample}_snps_tmp"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -233,12 +249,12 @@ rule variants: # Calls variants from the alignment (TODO)
 
 rule depth_fig:
     input:
-        expand(["{{out_base}}/{{title}}_coverage.tab",
-                "{{out_base}}/all_nextclade.csv"],
+        expand(["{out_base}/{title}_coverage.tab",
+                "{out_base}/all_nextclade.csv"],
                 out_base = out_base,
                 title = title)
     output:
-         "{{out_base}}/{{title}}_coverage.png"
+         "{out_base}/{title}_coverage.png"
     shell:
         """
 
@@ -260,13 +276,13 @@ rule depth_fig:
 
 rule collect_depth:
     input:
-        expand(["{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv", 
-                "{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.depth.tsv"],
+        expand(["{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv", 
+                "{out_base}/{sample}/aligned_bams/{sample}.sorted.depth.tsv"],
             out_base = out_base,
             title = title,
-            sample = df["sample"])
+            sample = df["full_name"])
     output:
-        "{{out_base}}/{{title}}_coverage.tab"
+        "{out_base}/{title}_coverage.tab"
     shell:
         """
         
@@ -279,12 +295,12 @@ rule collect_depth:
 
 rule depth:
     input:
-        ["{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam",
-         "{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.bam"]
+        ["{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam",
+         "{out_base}/{sample}/aligned_bams/{sample}.sorted.bam"]
     output:
-        ["{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
-         "{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.depth.tsv"]#,
-         #"{out_base}/{title}_{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
+        ["{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
+         "{out_base}/{sample}/aligned_bams/{sample}.sorted.depth.tsv"]#,
+         #"{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.amplicon_depth.tsv"]
     params:
         bed="{bed}".format(bed = bed_file)
     conda:
@@ -292,8 +308,8 @@ rule depth:
     shell:
         """
 
-        samtools depth -a {input[0]} | awk -v sam={wildcards.sample} '{{ print sam "\\tafter trimming\\t" $0 }}' > {output[0]}
-        samtools depth -a {input[1]} | awk -v sam={wildcards.sample} '{{ print sam "\\tbefore trimming\\t" $0 }}' > {output[1]}
+        samtools depth -m 0 -a {input[0]} | awk -v sam={wildcards.sample} '{{ print sam "\\tafter trimming\\t" $0 }}' > {output[0]}
+        samtools depth -m 0 -a {input[1]} | awk -v sam={wildcards.sample} '{{ print sam "\\tbefore trimming\\t" $0 }}' > {output[1]}
 
 
         """
@@ -303,15 +319,15 @@ rule trim_reads:
     input:
         #"{out_dir}/merged_aligned_bams/{sample}.sorted.bam"
         #"{out_dir}/aligned_bams/{sample}.sorted.bam"
-        "{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.bam"
+        "{out_base}/{sample}/aligned_bams/{sample}.sorted.bam"
 
     output:
         #"{out_dir}/trimmed_bams/{sample}.trimmed.sorted.bam"
-        "{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+        "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
 
     params:
         bed ="{bed}".format(bed = bed_file),
-        tmp ="{{out_base}}/{{title}}_{sample}/trimmed_bams/{sample}.trimmed.bam"
+        tmp ="{out_base}/{sample}/trimmed_bams/{sample}.trimmed.bam"
     conda:
         "envs/ivar-inpipe.yml"
     shell:
@@ -325,15 +341,15 @@ rule trim_reads:
 rule align_reads:
     input:
         #lambda wildcards: df[df["sample_library"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
-        lambda wildcards: df[df["sample"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
+        lambda wildcards: df[df["full_name"]==wildcards.sample][["forward_path", "reverse_path"]].values[0].tolist()
 
     output:
         #"{out_dir}/aligned_bams/{sample}.sorted.bam"
-        "{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.bam"
+        "{out_base}/{sample}/aligned_bams/{sample}.sorted.bam"
     params:
         ref = "{ref}".format(ref = reference),
-        trim_path = "{{out_base}}/{{title}}_{sample}/adapters_trimmed/",
-        tmp ="{{out_base}}/{{title}}_{sample}/aligned_bams/{sample}.sorted.tmp.bam"
+        trim_path = "{out_base}/{sample}/adapters_trimmed/",
+        tmp ="{out_base}/{sample}/aligned_bams/{sample}.sorted.tmp.bam"
     conda:
         "envs/ivar-inpipe.yml"
     threads:
