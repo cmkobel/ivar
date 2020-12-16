@@ -4,6 +4,7 @@
 f_pangolin="../output/all_pangolin.csv"
 f_nextclade="../output/all_nextclade.csv"
 f_input="../output/all_input_lists.tab"
+f_coverage="../output/all.coverage.tab"
 
 
 # collect pangolin 
@@ -24,7 +25,15 @@ cat ../output/*/nextclade/*_nextclade.csv | grep -v "seqName;substitutions;" >> 
 echo "input list ..."
 #echo -e "forward\\treverse\\tsample\\tcomment" > $f_input
 echo -e "forward\\treverse\\tsample\\tcomment\\tforward_path\\treverse_path\\tbatch\\tfull_name" > $f_input
-cat ../output/*input_list.tab | grep -vP "forward\\treverse" >> $f_input
+cat ../output/*_input_list.tab | grep -vP "forward\\treverse" >> $f_input
+
+
+# collect coverage list files
+echo "coverage ..."
+echo -e "sample\\tfilter\\ttarget\\tposition\\tcoverage" > $f_coverage
+cat ../output/*_coverage.tab >> $f_coverage
+
+
 
 
 

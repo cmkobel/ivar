@@ -3,14 +3,14 @@
 __default__:
     account: "ClinicalMicrobio"
     cpus-per-task: 1
-    time: "12:00:00"
-    mem: 32768
+    time: "01:00:00"    
+    mem: 8000
     output: "logs/{rule}-%j.out"
     #output: "logs/{rule}.out"
     error: "logs/{rule}-%j.err"
     #error: "logs/{rule}.err"
 
-main:
-    time: "02:00:00"
-    mem: 16384
+#main:
+#    time: "02:00:00"
+#    mem: 16384
 

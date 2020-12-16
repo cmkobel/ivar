@@ -63,8 +63,8 @@ print("//")
 # a little bit of input validation:
 sample_name_lengths = set(df["sample"].str.len().values.tolist())
 if sample_name_lengths != {9}:
-    print("\nWarning: Please make sure that the length of the \"sample\"-column is exactly 9 letters long.\nThe given sample names have the lengths", sample_name_lengths,
-          "\nThe MADS-format specifies LYYNNNNNN, where L is the sample type letter, YY is the year and NNNNNN is the sample no.",
+    print("\nNotice: Please make sure that the length of the \"sample\"-column is exactly 9 letters long.\nThe given sample names have the lengths", sample_name_lengths,
+          "\nThe mads-format specifies LYYNNNNNN, where L is the sample type letter, YY is the year and NNNNNN is the sample no.",
           "\nExample: I20274139\n//\n\n",
           file = sys.stdout)
 
@@ -100,7 +100,8 @@ rule all:
                 "{out_base}/all_nextclade.csv",
                 "{out_base}/all_pangolin.csv",
                 "{out_base}/{title}_input_list.tab",
-                "{out_base}/all_input_lists.tab"],
+                "{out_base}/all_input_lists.tab",
+                "{out_base}/{sample}/consensus_sequences/{sample}_alt.fa"],
                sample = df["full_name"],
                out_base = out_base,
                title = title)
@@ -218,8 +219,66 @@ rule call_consensus:
         "envs/ivar-inpipe.yml"
     shell:
         """
-        samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -p {output} -m 10 -n N
+        samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -q 30 -p {output} -m 5 -n N
+
         """
+
+
+# http://www.metagenomics.wiki/tools/samtools/consensus-sequence
+# I'm trying to make a consensus genome which has the same length of the reference.
+# This way it is easier to compare the sites between our samples and the reference.
+rule call_consesus_alt:
+    input:
+        "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+    output:
+        ["{out_base}/{sample}/consensus_sequences/{sample}_alt.fa"]
+
+    conda:
+        "envs/alt_consensus.yml"
+    params: 
+        base = "{out_base}/{sample}/consensus_sequences",
+        ref = "{ref}".format(ref = reference)
+    resources:
+        mem_mb = 8000,
+        time = "01:00:00"
+    shell:
+        """
+        
+        echo "samtools ..."
+        # Get consensus fastq file
+        samtools mpileup -uf {params.ref} {input} | bcftools call -c | vcfutils.pl vcf2fq > {params.base}/SAMPLE_cns.fastq
+
+
+        # vcfutils.pl is part of bcftools
+
+
+        echo "seqtk ..."
+        # Convert .fastq to .fasta and set bases of quality lower than 30 to N
+        seqtk seq -aQ64 -q30 -n N {params.base}/SAMPLE_cns.fastq > {params.base}/SAMPLE_cns.fasta
+
+        mv {params.base}/SAMPLE_cns.fasta {output}
+
+        """
+
+
+
+
+rule call_consensus_q20:
+    input:
+        "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
+    output:
+        "{out_base}/{sample}/consensus_sequences/{sample}_q20.fa"
+    conda:
+        "envs/ivar-inpipe.yml"
+    shell:
+        """
+        samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -q 20 -p {output} -m 10 -n N
+
+        """
+
+
+
+
 
 rule variants: # Calls variants from the alignment (TODO)
     input:
@@ -326,7 +385,7 @@ rule trim_reads:
         "envs/ivar-inpipe.yml"
     shell:
         """
-        ivar trim -e -i {input} -b {params.bed} -p {params.tmp}
+        ivar trim -e -i {input} -b {params.bed} -p {params.tmp} -q 30
         samtools sort -T {wildcards.sample}.trim -o {output} {params.tmp}
         rm {params.tmp}
         """
@@ -363,3 +422,6 @@ rule align_reads:
         rm {params.tmp}
 
         """
+
+
+

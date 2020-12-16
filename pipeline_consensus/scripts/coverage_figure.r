@@ -144,7 +144,7 @@ b = bed_insert %>%
     
     facet_grid(chrom~.) +
     xlim(0, coverage$position %>% max) + 
-    ylim(-1.5,1.5); b
+    ylim(-1.5,1.5); #b
 
 
 
