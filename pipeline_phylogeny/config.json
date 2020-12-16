@@ -1,0 +1,6 @@
+{
+    "input_samples": "samples.tab",
+
+    "reference": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.reference.fasta",
+
+}

@@ -1,0 +1,142 @@
+
+
+
+import os
+from datetime import datetime
+import time
+import re
+from shutil import copyfile
+import pandas as pd
+import re
+
+#configfile: "config.json"
+
+#title = config["title"]
+
+#sample_file = config["input_samples"]
+#consensus_location = "../output"
+
+
+title = "201214_brothers"
+
+sample_file = "input/" + title + ".tsv"
+metadata_file = "input/" + title + "_meta.tsv"
+reference = config["reference"]
+consensus_location = "../output"
+
+
+df = pd.read_table(sample_file, sep="\t")
+
+
+print(df)
+
+
+
+rule all:
+    input:
+        expand(["output/{title}/iqtree/alignment.treefile",
+                "output/{title}/augur_refine/branch_lengths.json"],
+            sample = df["sample"], 
+            title = title,
+            allow_missing = True)
+
+
+
+rule refine:
+    input:
+        tree = "output/{title}/iqtree/alignment.treefile",
+        alignment = "output/{title}/alignment/alignment.fasta",
+        metadata = metadata_file
+    params:
+        clock_rate = 0.0008,
+        clock_std_dev = 0.0002
+    output:
+        tree = "output/{title}/augur_refine/refined_tree.treefile",
+        node_data = "output/{title}/augur_refine/branch_lengths.json"
+    shell:
+        """
+
+        singularity run docker://staphb/augur \
+            augur refine \
+                --tree {input.tree} \
+                --alignment {input.alignment} \
+                --metadata {input.metadata} \
+                --timetree \
+                --date-confidence \
+                  --clock-rate {params.clock_rate} \
+                  --clock-std-dev {params.clock_std_dev} \
+                --output-tree {output.tree} \
+                --output-node-data {output.node_data}
+
+        """
+
+
+
+
+
+rule tree:
+    input:
+        "output/{title}/alignment/alignment.fasta"
+    output:
+        "output/{title}/iqtree/alignment.treefile"
+    conda: 
+        "envs/phylogeny.yml"
+    threads:
+        8
+    shell:
+        """
+
+        which iqtree > iqtree_help.txt
+        iqtree --help >> iqtree_help.txt
+
+        #cp 
+        
+        #cd output/{wildcards.title}/iqtree
+
+
+        iqtree -s {input} -bb 1000 -redo --prefix output/{title}/iqtree/alignment
+
+        """
+
+
+
+
+
+rule align:
+    input:
+        expand("output/{title}/renamed/{sample}.fa", sample = df["sample"], title = title)
+    output:
+        "output/{title}/alignment/alignment.fasta"
+    params:
+        all = "output/{title}/alignment/catted_sequences.fasta"
+    conda:
+        "envs/mafft.yml"
+    shell:
+        """
+
+        cat {input} > {params.all}
+
+        mafft --thread 8 {params.all} > {output}
+
+        """
+
+
+
+
+rule gather_genomes:
+    input:
+        #expand("{path}", path = df["path"])
+        lambda wildcards: df[df["sample"]==wildcards.sample][["path"]].values[0].tolist()
+    output:
+        "output/{title}/renamed/{sample}.fa"
+    shell:
+        """
+
+        cat {input} \
+        | fasta2tabseq.py --fill_sample {wildcards.sample} \
+        | tabseq2fasta.py --clear_part --clear_comment \
+        > {output}
+
+        """
+
+
