@@ -45,7 +45,7 @@ rule all:
 rule refine:
     input:
         tree = "output/{title}/iqtree/alignment.treefile",
-        alignment = "output/{title}/alignment/alignment.fasta",
+        alignment = "output/{title}/alignment/alignment_nogaps.fasta",
         metadata = metadata_file
     params:
         clock_rate = 0.0008,
@@ -74,9 +74,10 @@ rule refine:
 
 
 
+
 rule tree:
     input:
-        "output/{title}/alignment/alignment.fasta"
+        "output/{title}/alignment/alignment_nogaps.fasta"
     output:
         "output/{title}/iqtree/alignment.treefile"
     conda: 
@@ -96,9 +97,24 @@ rule tree:
 
         iqtree -s {input} -bb 1000 -redo --prefix output/{title}/iqtree/alignment
 
+    
+
         """
 
+rule trim_alignment:
+    input:
+        "output/{title}/alignment/alignment.fasta"
+    output:
+        "output/{title}/alignment/alignment_nogaps.fasta"
+    conda:
+        "envs/trimal.yml"
+    shell:
+        """
 
+        trimal -nogaps -in {input} > {output}
+
+
+        """
 
 
 
