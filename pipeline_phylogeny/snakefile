@@ -17,7 +17,7 @@ import re
 #consensus_location = "../output"
 
 
-title = "201214_brothers"
+title = "201214_brothers_justmasked"
 
 sample_file = "input/" + title + ".tsv"
 metadata_file = "input/" + title + "_meta.tsv"
@@ -45,7 +45,7 @@ rule all:
 rule refine:
     input:
         tree = "output/{title}/iqtree/alignment.treefile",
-        alignment = "output/{title}/alignment/alignment_nogaps.fasta",
+        alignment = "output/{title}/alignment/alignment.fasta",
         metadata = metadata_file
     params:
         clock_rate = 0.0008,
@@ -77,7 +77,7 @@ rule refine:
 
 rule tree:
     input:
-        "output/{title}/alignment/alignment_nogaps.fasta"
+        "output/{title}/alignment/alignment.fasta"
     output:
         "output/{title}/iqtree/alignment.treefile"
     conda: 
@@ -111,7 +111,11 @@ rule trim_alignment:
     shell:
         """
 
+        # TODO: Consider trimming on pairwise aligments with the reference instead.
+
         trimal -nogaps -in {input} > {output}
+
+
 
 
         """
