@@ -179,7 +179,6 @@ rule nextclade:
                     --output-csv /sample_dir/{params.rel_out}.tmp
 
         cat {output}.tmp \
-        | grep -vE "^seqName" \
         | awk -v sam={wildcards.sample} '{{ print sam ";" $0 }}' \
         > {output}
 
