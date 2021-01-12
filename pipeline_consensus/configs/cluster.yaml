@@ -14,3 +14,6 @@ __default__:
 #    time: "02:00:00"
 #    mem: 16384
 
+depth_fig:
+  time: "24:00:00"
+  mem: 16000

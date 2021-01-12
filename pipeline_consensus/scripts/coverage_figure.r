@@ -11,6 +11,15 @@ print("These are the args")
 print(args)
 
 
+
+path_catted_coverage =  "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/pipeline_consensus/output/201123_coverage.tab"
+nextclade_path =  "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/pipeline_consensus/output/all_nextclade.csv"
+path_primer_bed =  "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed"
+path_insert_bed =  "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.insert.bed"
+path_out =  "plots/cov.png"
+cowplot_source_path = NA
+
+
 path_catted_coverage = args[1] #  "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/output/201123/depth_all.tsv"
 nextclade_path = args[2]    # ~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/output/all_nextclade.csv
 path_primer_bed = args[3] # "~/GenomeDK/ClinicalMicrobio/faststorage/artic/ivar/artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed"
@@ -118,7 +127,7 @@ a = coverage %>%
     labs(); #a
 
 
-
+sample_size = coverage$sample %>% unique %>% length
 
 
 # blå   00bfc4
@@ -144,7 +153,7 @@ b = bed_insert %>%
     
     facet_grid(chrom~.) +
     xlim(0, coverage$position %>% max) + 
-    ylim(-1.5,1.5); #b
+    ylim(-1.5, 1.5); #b
 
 
 
@@ -153,5 +162,7 @@ p = plot_grid(b, a, ncol = 1,
               align = "v", axis = "lr")
 # p
 
-ggsave(path_out, height = 10, width = 30, plot = p)    
+#ggsave(path_out, height = 10, width = 30, plot = p)
+ggsave(path_out, height = 10, width = 8 + sample_size * 0.5, plot = p)
+
 

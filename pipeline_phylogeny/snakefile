@@ -1,6 +1,5 @@
 
 
-
 import os
 from datetime import datetime
 import time
@@ -14,15 +13,19 @@ import re
 #title = config["title"]
 
 #sample_file = config["input_samples"]
-#consensus_location = "../output"
 
 
-title = "201214_brothers_justmasked"
+
+title = "201228_nosocomial"
+title = "210105_brothers"
+title = "210105_hepato"
+title = "210108_brothers_spikeall"
 
 sample_file = "input/" + title + ".tsv"
 metadata_file = "input/" + title + "_meta.tsv"
 reference = config["reference"]
-consensus_location = "../output"
+bed_problem_mask = "resources/ProblematicSites_SARS-CoV2/subset_vcf/problematic_sites_sarsCov2.mask.vcf"
+
 
 
 df = pd.read_table(sample_file, sep="\t")
@@ -34,33 +37,45 @@ print(df)
 
 rule all:
     input:
-        expand(["output/{title}/iqtree/alignment.treefile",
-                "output/{title}/augur_refine/branch_lengths.json"],
-            sample = df["sample"], 
+        expand(["output/{title}/alignment/alignment.fasta",         # rule align
+                "output/{title}/alignment/alignment_masked.fasta",   # rule mask
+                "output/{title}/iqtree/alignment.treefile",          # rule tree
+                "output/{title}/augur_refine/branch_lengths.json",
+                "output/{title}/alignment/snp_dists_alignment_masked.tab" # rule snp_dists
+                ],
+            sample = df["sample"],
             title = title,
             allow_missing = True)
 
 
 
+# TODO: parametrize not running augur refine when the number of samples is below 4
+#   I don't know why it doesn't run with that few sequences...
 rule refine:
     input:
-        tree = "output/{title}/iqtree/alignment.treefile",
-        alignment = "output/{title}/alignment/alignment.fasta",
-        metadata = metadata_file
+        tree = expand("output/{title}/iqtree/alignment.treefile", title = title),
+        alignment = expand("output/{title}/alignment/alignment_masked.fasta", title = title)
+        #metadata = metadata_file
     params:
         clock_rate = 0.0008,
-        clock_std_dev = 0.0002
+        clock_std_dev = 0.0002,
+        metadata_file = "output/{title}/date.tsv", # This is a temporary file
+        metadata = df[["sample", "date"]].\
+                        rename(columns={"sample": "name"}).\
+                        to_csv(index = False, sep = "\t")
     output:
         tree = "output/{title}/augur_refine/refined_tree.treefile",
         node_data = "output/{title}/augur_refine/branch_lengths.json"
     shell:
         """
 
+        echo "{params.metadata}" > {params.metadata_file}
+
         singularity run docker://staphb/augur \
             augur refine \
                 --tree {input.tree} \
                 --alignment {input.alignment} \
-                --metadata {input.metadata} \
+                --metadata {params.metadata_file} \
                 --timetree \
                 --date-confidence \
                   --clock-rate {params.clock_rate} \
@@ -68,16 +83,19 @@ rule refine:
                 --output-tree {output.tree} \
                 --output-node-data {output.node_data}
 
+        rm {params.metadata_file} 
+
         """
 
 
 
 
 
-
+# TODO: parametrize conditional activation of bootstrap when the number of samples >= 4
 rule tree:
     input:
-        "output/{title}/alignment/alignment.fasta"
+        expand("output/{title}/alignment/alignment_masked.fasta", title = title)
+
     output:
         "output/{title}/iqtree/alignment.treefile"
     conda: 
@@ -87,36 +105,68 @@ rule tree:
     shell:
         """
 
-        which iqtree > iqtree_help.txt
-        iqtree --help >> iqtree_help.txt
-
-        #cp 
-        
-        #cd output/{wildcards.title}/iqtree
 
 
-        iqtree -s {input} -bb 1000 -redo --prefix output/{title}/iqtree/alignment
 
-    
+        iqtree -s {input} -redo --prefix output/{title}/iqtree/alignment
+        #iqtree -s {input} -bb 1000 -redo --prefix output/{title}/iqtree/alignment
+
+
 
         """
 
-rule trim_alignment:
+
+
+
+
+rule snp_dists:
     input:
-        "output/{title}/alignment/alignment.fasta"
-    output:
-        "output/{title}/alignment/alignment_nogaps.fasta"
+        unmasked = expand("output/{title}/alignment/alignment.fasta", title = title),
+        masked = expand("output/{title}/alignment/alignment_masked.fasta", title = title),
+    output: 
+        unmasked = "output/{title}/alignment/snp_dists_alignment_unmasked.tab",
+        masked = "output/{title}/alignment/snp_dists_alignment_masked.tab"
     conda:
-        "envs/trimal.yml"
+        "envs/phylogeny.yml"
     shell:
         """
 
-        # TODO: Consider trimming on pairwise aligments with the reference instead.
+        snp-dists {input.masked} -m > {output.masked}
 
-        trimal -nogaps -in {input} > {output}
+        # Why not check how the unmasked alignment performs?
+        snp-dists {input.unmasked} -m > {output.unmasked}
 
 
 
+
+
+
+        """
+
+
+
+
+rule mask:
+    input:
+        bed = expand("output/{title}/renamed/{sample}.vcf", sample = df["sample"], title = title),
+        fasta = "output/{title}/alignment/alignment.fasta"
+    output:
+        "output/{title}/alignment/alignment_masked.fasta"
+    params:
+        bed_collected = "output/{title}/alignment/collected_beds.vcf"
+    conda:
+        "envs/phylogeny.yml"
+    shell:
+        """
+
+        # old template
+        ## bedtools maskfasta -fi ../data/SARS-CoV-2.fa -mc - -bed ../subset_vcf/problematic_sites_sarsCov2.mask.vcf -fo SARS-CoV-2_masked.fa  
+
+        # Concatenate the beds (actually vcf, but who cares)
+        cat {input.bed} > {params.bed_collected}
+
+        bedtools maskfasta -fi {input.fasta} -mc - -bed {params.bed_collected} -fo {output} 
+        
 
         """
 
@@ -124,38 +174,55 @@ rule trim_alignment:
 
 rule align:
     input:
-        expand("output/{title}/renamed/{sample}.fa", sample = df["sample"], title = title)
+        expand("output/{title}/renamed/{sample}.fa", sample = df["sample"], title = title),
     output:
         "output/{title}/alignment/alignment.fasta"
     params:
-        all = "output/{title}/alignment/catted_sequences.fasta"
+        all = "output/{title}/alignment/catted_sequences.fasta", # This rule cats the input genomes into this file
+        reference = reference
     conda:
         "envs/mafft.yml"
     shell:
         """
 
+        # Concatenate the genomes
         cat {input} > {params.all}
 
-        mafft --thread 8 {params.all} > {output}
+        mafft --add {params.all} --keeplength {params.reference} > {output}
+
+        
+
+
 
         """
 
 
 
 
-rule gather_genomes:
+
+rule clean_records:
     input:
         #expand("{path}", path = df["path"])
-        lambda wildcards: df[df["sample"]==wildcards.sample][["path"]].values[0].tolist()
+        fasta = lambda wildcards: df[df["sample"]==wildcards.sample][["path"]].values[0].tolist(),
+        bed = bed_problem_mask
     output:
-        "output/{title}/renamed/{sample}.fa"
+        fasta = "output/{title}/renamed/{sample}.fa",
+        bed = "output/{title}/renamed/{sample}.vcf"
     shell:
         """
 
-        cat {input} \
+        cat {input.fasta} \
         | fasta2tabseq.py --fill_sample {wildcards.sample} \
         | tabseq2fasta.py --clear_part --clear_comment \
-        > {output}
+        > {output.fasta}
+
+
+        # Also, create a custom bed-file for masking the alignment later
+
+        cat resources/ProblematicSites_SARS-CoV2/subset_vcf/problematic_sites_sarsCov2.mask.vcf | grep -vE "^#" | cut -f 2- | awk -v sample={wildcards.sample} '{{ print sample "\\t" $0 }}' \
+        > {output.bed}
+
+
 
         """
 

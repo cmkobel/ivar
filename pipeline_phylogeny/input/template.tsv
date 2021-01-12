@@ -1,2 +1,2 @@
-sample	path	comment
-201230_V19123456	../output/201230_V19123456/consensus_sequences/201230_V19123456.fa	
+sample	path	date	comment
+201230_V19123456	path/to/201230_V19123456.fa	2020-06-11

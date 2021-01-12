@@ -4,7 +4,10 @@
     "title": "201204",
     "title": "201209",
     "title": "201215.M03854",
-    "title": "201215.M07104",
+    "title": "201215.M07104.63",
+    "title": "201215.M07104.65",
+    "title": "201223",
+    "title": "210108",
     
     "batch_paths": {
         "201123" : "../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq",
@@ -12,7 +15,14 @@
         "201204" : "../../../BACKUP/N338/201204_M07104_0027_000000000-J6V4N/fastq",
         "201209" : "../../../BACKUP/N331/201209_M07104_0028_000000000-J74H4/fastq",
         "201215.M03854" : "../../../BACKUP/N331/201215_M03854_0500_000000000-J9L3D/fastq",
-        "201215.M07104" : "../../../BACKUP/N331/201215_M07104_0029_000000000-J9NJR/fastq", 
+        "201215.M07104.63" : "../../../BACKUP/N331/201215_M07104_0029_000000000-J9NJR/fastq", 
+        "201215.M07104.65" : "../../../BACKUP/N331/201215_M07104_0029_000000000-J9NJR/fastq", 
+    "201223" : "catted_reads/201223",
+    "210108" : "catted_reads/210108",
+
+
+
+
 
 
         "201123_short" : "../../../BACKUP/N331/201123_M07104_0023_000000000-JB5R2/fastq",        
@@ -24,7 +34,7 @@
     "bed_file": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.primer.bed",
     "bed_insert_file": "../artic-ncov2019_gh_clone/artic-ncov2019/primer_schemes/SARS-CoV-2/V3/nCoV-2019.insert.bed",
     "cowplot_source": "../resources/cowplot_1.1.0.tar.gz",
-    "out_base": "../output", 
-    "input_base": "../input",
+    "out_base": "output", 
+    "input_base": "input",
 
 }

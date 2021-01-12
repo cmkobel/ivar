@@ -3,13 +3,13 @@
 # snakemake --profile configs/slurm2 all
 # snakemake --profile configs/slurm all
 
-
+print("<!-- ")
 
 print("""      ___     __        
      (_) \\   / /_ _ _ __ 
      | |\\ \\ / / _` | '__|
      | | \\ V / (_| | |   
-     |_|  \\_/ \\__,_|_|   
+     |_|  \\_/ \\__,_|_|  consensus
 """)
 
 
@@ -60,6 +60,8 @@ print(df)
 print("//")
 
 
+
+
 # a little bit of input validation:
 sample_name_lengths = set(df["sample"].str.len().values.tolist())
 if sample_name_lengths != {9}:
@@ -68,6 +70,7 @@ if sample_name_lengths != {9}:
           "\nExample: I20274139\n//\n\n",
           file = sys.stdout)
 
+print(" -->")
 
 df["forward_path"] = batch_path + "/" + df["forward"]
 df["reverse_path"] = batch_path + "/" +df["reverse"]
@@ -91,6 +94,7 @@ rule all:
     input:
         #expand("{out_dir}/consensus_sequences/{sample}.fa", out_dir = out_dir, sample = _["sample_library"])
         expand(["{out_base}/{sample}/consensus_sequences/{sample}.fa",
+                "{out_base}/{sample}/consensus_sequences/final/{sample}.fa", 
                 "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.depth.tsv",
                 "{out_base}/{sample}/aligned_bams/{sample}.sorted.bam",
                 "{out_base}/{sample}/trimmed_bams/{sample}_snps.tsv",
@@ -156,7 +160,7 @@ rule batch: # Runs once per batch. Outputs the pandas dataframe that snakemake r
 
 
 
-
+# TODO: use singularity for latest version.
 rule nextclade:
     input:
         "{out_base}/{sample}/consensus_sequences/{sample}.fa"
@@ -169,12 +173,13 @@ rule nextclade:
     shell:
         """
         singularity run --bind {params.bind_base}:/sample_dir \
-            docker://neherlab/nextclade:0.7.5 \
+            docker://neherlab/nextclade \
                 nextclade.js \
                     --input-fasta /sample_dir/{params.rel_in} \
                     --output-csv /sample_dir/{params.rel_out}.tmp
 
         cat {output}.tmp \
+        | grep -vE "^seqName" \
         | awk -v sam={wildcards.sample} '{{ print sam ";" $0 }}' \
         > {output}
 
@@ -197,15 +202,29 @@ rule pangolin:
     shell:
         """
         
-        touch {output[1]}
+        touch {output[1]} # why?
 
-        pangolin {input} \
+        # pangolin {input} \
+        #         --threads 1 \
+        #         --outdir {output[0]}
+
+
+        singularity run docker://staphb/pangolin \
+            pangolin {input} \
                 --threads 1 \
                 --outdir {output[0]}
 
         cat {output[0]}/lineage_report.csv | awk -v sam={wildcards.sample} '{{ print sam "," $0 }}' > {output[1]}
         rm {output[0]}/lineage_report.csv
-        #mv {output[0]}/lineage_report.csv {output[1]}
+
+
+
+        
+
+
+
+
+
 
         """
 
@@ -214,12 +233,16 @@ rule call_consensus:
     input:
         "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
-        "{out_base}/{sample}/consensus_sequences/{sample}.fa"
+        ["{out_base}/{sample}/consensus_sequences/{sample}.fa",
+         "{out_base}/{sample}/consensus_sequences/final/{sample}.fa"] # ivar consensus makes a lot of messy files, so it is nice that the final assembly lies isolated in its own dir (final).
+
     conda:
         "envs/ivar-inpipe.yml"
     shell:
         """
-        samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -q 30 -p {output} -m 5 -n N
+        samtools mpileup -A -Q 0 -d 0 {input} | ivar consensus -q 30 -p {output[0]} -m 10 -n N
+
+        cp {output[0]} {output[1]}
 
         """
 
@@ -227,7 +250,7 @@ rule call_consensus:
 # http://www.metagenomics.wiki/tools/samtools/consensus-sequence
 # I'm trying to make a consensus genome which has the same length of the reference.
 # This way it is easier to compare the sites between our samples and the reference.
-rule call_consesus_alt:
+rule call_consensus_alt:
     input:
         "{out_base}/{sample}/trimmed_bams/{sample}.trimmed.sorted.bam"
     output:
